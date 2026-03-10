@@ -15,27 +15,66 @@ import (
 )
 
 func readConf(path string) (map[string]string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
 	conf := make(map[string]string)
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		parts := strings.SplitN(line, "=", 2)
+
+	// Step 1: load all environment variables first
+	for _, env := range os.Environ() {
+		parts := strings.SplitN(env, "=", 2)
 		if len(parts) != 2 {
 			continue
 		}
-		conf[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+		conf[parts[0]] = parts[1]
 	}
 
-	return conf, scanner.Err()
+	// Step 2: optionally load from file if it exists
+	file, err := os.Open(path)
+	if err == nil {
+		defer file.Close()
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) != 2 {
+				continue
+			}
+
+			key := strings.TrimSpace(parts[0])
+			val := strings.TrimSpace(parts[1])
+
+			// Only set if not already in env
+			if _, exists := conf[key]; !exists {
+				conf[key] = val
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			return nil, err
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+
+	// Step 3: validate required keys
+	required := []string{
+		"HTTP_BIND",
+		"INTERFACE",
+		"DHCP_RANGE_START",
+		"DHCP_RANGE_END",
+		"DHCP_MASK",
+		"DHCP_ROUTER",
+		"DNS_SERVERS",
+	}
+
+	for _, key := range required {
+		if val, ok := conf[key]; !ok || strings.TrimSpace(val) == "" {
+			return nil, fmt.Errorf("missing required configuration: %s", key)
+		}
+	}
+
+	return conf, nil
 }
 
 func main() {
@@ -58,7 +97,12 @@ func main() {
 		}
 	}
 
-	conf, err := readConf("/opt/pxehub/pxehub.conf")
+	confPath := os.Getenv("PXEHUB_CONF")
+	if confPath == "" {
+		confPath = "/opt/pxehub/pxehub.conf"
+	}
+
+	conf, err := readConf(confPath)
 	if err != nil {
 		log.Println("Error reading conf:", err)
 		return

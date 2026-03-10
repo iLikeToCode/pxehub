@@ -67,6 +67,10 @@ func (h *HttpServer) Start() error {
 	router.GET("/tasks/new", h.UI)
 	router.GET("/tasks/edit/:id", h.UI)
 
+	// UI Login
+	router.GET("/login", h.UI)
+	router.POST("/login", h.LoginPost)
+
 	// User Extras
 	router.ServeFiles("/extras/*filepath", http.Dir(h.ExtrasDir))
 

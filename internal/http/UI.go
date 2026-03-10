@@ -19,6 +19,17 @@ func (h *HttpServer) UI(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 
 	path := strings.Trim(r.URL.Path, "/")
 
+	var name = ""
+
+	if path != "login" {
+		if username, ok := getSessionUsername(r); ok {
+			name = username
+		} else {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+	}
+
 	switch path {
 	case "":
 		files := []string{
@@ -59,7 +70,7 @@ func (h *HttpServer) UI(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 		caser := cases.Title(language.English)
 		data := map[string]any{
 			"Title":                 caser.String("Home"),
-			"Name":                  "User",
+			"Name":                  name,
 			"Path":                  r.URL.Path,
 			"RegisteredGraphData":   graphData1,
 			"UnregisteredGraphData": graphData2,
@@ -103,7 +114,7 @@ func (h *HttpServer) UI(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 		caser := cases.Title(language.English)
 		data := map[string]any{
 			"Title": caser.String("hosts"),
-			"Name":  "User",
+			"Name":  name,
 			"Path":  r.URL.Path,
 			"Hosts": template.HTML(hostsHtml),
 			"Tasks": tasks,
@@ -137,9 +148,35 @@ func (h *HttpServer) UI(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 		caser := cases.Title(language.English)
 		data := map[string]any{
 			"Title": caser.String("tasks"),
-			"Name":  "User",
+			"Name":  name,
 			"Path":  r.URL.Path,
 			"Tasks": tasksHtml,
+		}
+
+		if err := tmpl.ExecuteTemplate(w, "base", data); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+	case "login":
+		files := []string{
+			"base.html",
+			"login.html",
+		}
+
+		tmpl, err := template.ParseFS(ui.Content, files...)
+		if err != nil {
+			if os.IsNotExist(err) {
+				http.NotFound(w, r)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		data := map[string]any{
+			"Title": "Login",
+			"Path":  r.URL.Path,
+			"Error": r.URL.Query().Get("error"), // optional: pass error via query
 		}
 
 		if err := tmpl.ExecuteTemplate(w, "base", data); err != nil {
@@ -174,7 +211,7 @@ func (h *HttpServer) UI(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 			caser := cases.Title(language.English)
 			data := map[string]any{
 				"Title": caser.String("edit task"),
-				"Name":  "User",
+				"Name":  name,
 				"Path":  r.URL.Path,
 				"Task":  task,
 			}
@@ -216,7 +253,7 @@ func (h *HttpServer) UI(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 			caser := cases.Title(language.English)
 			data := map[string]any{
 				"Title": caser.String("edit task"),
-				"Name":  "User",
+				"Name":  name,
 				"Path":  r.URL.Path,
 				"Host":  host,
 				"Tasks": tasks,
