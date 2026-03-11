@@ -7,6 +7,8 @@
 		  "version": "latest"
 		}
 	},
+  	"overrideCommand": true,
+  	"command": "sh -c 'nix develop --command sleep infinity'",
 	"customizations": {
 		"vscode": {
 			"extensions": [
